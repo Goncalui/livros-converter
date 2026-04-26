@@ -52,8 +52,9 @@ export async function convertBatches({ batchesDir, outDir, promptPath, state, on
 
     const prompt = buildBatchPrompt(promptPath, batch);
     const images = [];
-    if (batch.needs_vision) {
-      // Anexa imagens das páginas que precisam de visão
+    const visionEnabled = (process.env.LLM_VISION_ESCALATION ?? '1') !== '0';
+    if (visionEnabled && batch.needs_vision) {
+      // Anexa imagens das páginas com OCR ruim (LLM_VISION_ESCALATION=0 desativa)
       const rawDir = path.resolve(batchesDir, '..', 'raw');
       for (const p of batch.pages) {
         if (p.needs_vision && p.image) images.push(path.join(rawDir, p.image));

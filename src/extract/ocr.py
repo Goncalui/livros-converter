@@ -148,6 +148,35 @@ def main():
 
     print(f"[ocr] modo={args.mode} min_conf={args.min_confidence}", flush=True)
 
+    # Modo GLM puro com batching: processa todas as páginas escaneadas de uma vez
+    if args.mode == "glm":
+        from engines import glm as eng_glm
+        scanned = [e for e in manifest if e["type"] == "escaneado"]
+        if scanned:
+            paths = [raw_dir / e["image"] for e in scanned]
+            batch_size = int(os.environ.get("GLM_OCR_BATCH_SIZE", "3"))
+            print(f"[ocr] GLM batch_size={batch_size} sobre {len(paths)} páginas", flush=True)
+            results = eng_glm.run_batch(paths, batch_size=batch_size)
+            for entry, (text, conf, _layout) in zip(scanned, results):
+                i = entry["page"]
+                if text is None:
+                    # fallback Paddle
+                    p = run_engine("paddle", raw_dir / entry["image"])
+                    text = p["text"] or ""
+                    conf = p["confidence"]
+                    src = "paddle"
+                else:
+                    src = "glm"
+                out = raw_dir / f"page-{i:03d}.txt"
+                write_text(out, text)
+                entry["text_file"] = out.name
+                entry["text_source"] = src
+                entry["ocr_confidence"] = round(conf, 4)
+                entry["needs_vision"] = conf < args.min_confidence
+                print(f"[ocr] página {i} → {src} conf={conf:.2f}", flush=True)
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        return
+
     for entry in manifest:
         if entry["type"] != "escaneado":
             continue
