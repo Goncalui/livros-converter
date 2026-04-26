@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url';
 
 export const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
-export const WORKSPACE_ROOT = path.join(PROJECT_ROOT, 'workspace');
+export const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT
+  ? path.resolve(process.env.WORKSPACE_ROOT)
+  : path.join(PROJECT_ROOT, 'workspace');
 // Procura o prompt: dentro do repo primeiro, senão na pasta-pai (setup local).
 import fs from 'node:fs';
 const _internal = path.join(PROJECT_ROOT, 'prompt-conversao-livros.md');

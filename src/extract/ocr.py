@@ -32,6 +32,22 @@ from engines.compare import metrics, pick_winner
 
 def write_text(path: Path, text: str):
     path.write_text(text or "", encoding="utf-8")
+    _fsync(path)
+
+
+def _fsync(path: Path):
+    """Força flush ao disco (importante para Google Drive FUSE no Colab)."""
+    try:
+        with open(path, "rb") as f:
+            os.fsync(f.fileno())
+    except Exception:
+        pass
+
+
+def write_json_atomic(path: Path, data):
+    """Escreve JSON e força fsync — garante persistência incremental no Drive."""
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _fsync(path)
 
 
 def run_engine(name, image_path):
@@ -185,9 +201,7 @@ def main():
                     entry["needs_vision"] = conf < args.min_confidence
                     print(f"[ocr] página {i} → {src} conf={conf:.2f}", flush=True)
                 # flush manifest após cada chunk
-                manifest_path.write_text(
-                    json.dumps(manifest, ensure_ascii=False, indent=2),
-                    encoding="utf-8")
+                write_json_atomic(manifest_path, manifest)
         return
 
     force = os.environ.get("OCR_FORCE", "0") == "1"
@@ -243,8 +257,10 @@ def main():
 
         flag = " (precisa vision)" if entry["needs_vision"] else ""
         print(f"[ocr] página {i} → vencedor={source} conf={conf:.2f}{flag}", flush=True)
+        # flush incremental — sobrevive a crash/timeout no Colab
+        write_json_atomic(manifest_path, manifest)
 
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_atomic(manifest_path, manifest)
 
 
 if __name__ == "__main__":
