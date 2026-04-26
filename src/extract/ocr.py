@@ -152,10 +152,24 @@ def main():
     # (essencial para o pipeline de streaming, que polla os arquivos por página).
     if args.mode == "glm":
         from engines import glm as eng_glm
-        scanned = [e for e in manifest if e["type"] == "escaneado"]
+        all_scanned = [e for e in manifest if e["type"] == "escaneado"]
+        force = os.environ.get("OCR_FORCE", "0") == "1"
+
+        def already_done(e):
+            if force:
+                return False
+            if not e.get("text_source") or e["text_source"] == "skipped":
+                return False
+            txt = raw_dir / f"page-{e['page']:03d}.txt"
+            return txt.exists()
+
+        skipped = [e for e in all_scanned if already_done(e)]
+        scanned = [e for e in all_scanned if not already_done(e)]
+        if skipped:
+            print(f"[ocr] retomando: {len(skipped)} páginas já processadas, pulando", flush=True)
         if scanned:
             batch_size = int(os.environ.get("GLM_OCR_BATCH_SIZE", "2"))
-            print(f"[ocr] GLM batch_size={batch_size} sobre {len(scanned)} páginas", flush=True)
+            print(f"[ocr] GLM batch_size={batch_size} sobre {len(scanned)} páginas restantes", flush=True)
             for cs in range(0, len(scanned), batch_size):
                 chunk = scanned[cs:cs + batch_size]
                 paths = [raw_dir / e["image"] for e in chunk]
@@ -176,11 +190,18 @@ def main():
                     encoding="utf-8")
         return
 
+    force = os.environ.get("OCR_FORCE", "0") == "1"
     for entry in manifest:
         if entry["type"] != "escaneado":
             continue
         i = entry["page"]
         img = raw_dir / entry["image"]
+
+        if not force and entry.get("text_source") and entry["text_source"] != "skipped":
+            txt = raw_dir / f"page-{i:03d}.txt"
+            if txt.exists():
+                print(f"[ocr] página {i} → pulando (já processada via {entry['text_source']})", flush=True)
+                continue
 
         if args.mode == "skip":
             # Não roda OCR; força pipeline a usar LLM-vision.
