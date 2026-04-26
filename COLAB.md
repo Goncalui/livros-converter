@@ -260,25 +260,27 @@ Pronto — markdowns, `index.md`, comparação OCR e logs ficam salvos no Drive.
 
 ## 3. Dicas e soluções
 
-### Sessão expirou (12h)
-Use `node src/cli.js resume input-bio-cap1` na Célula 7 — retoma do último lote. O `.state.json` mora no `workspace/` mas, em Colab, recarrega zerado. Para sobreviver a reconexões, **salve o workspace inteiro no Drive a cada N minutos**:
+### Persistência incremental no Drive (recomendado)
+Aponte `WORKSPACE_ROOT` direto para uma pasta no Drive e o pipeline grava `manifest.json`, `page-NNN.txt`, `batch-NNN.md` e `.state.json` **com fsync por página/lote**. Sessão pode cair a qualquer momento sem perder trabalho.
 
-```python
-# Célula opcional pra rodar em paralelo (loop a cada 5min)
-import time, shutil, os
-SRC = '/content/livros-converter/workspace'
-DST = '/content/drive/MyDrive/livros-output/_workspace_backup'
-while True:
-    os.makedirs(DST, exist_ok=True)
-    shutil.copytree(SRC, DST, dirs_exist_ok=True)
-    print('checkpoint @', time.strftime('%H:%M'))
-    time.sleep(300)
-```
-
-E para retomar numa nova sessão, copie de volta antes da Célula 7:
+Na célula que roda o pipeline:
 ```bash
-!cp -r /content/drive/MyDrive/livros-output/_workspace_backup /content/livros-converter/workspace
+!cd /content/livros-converter && \
+  WORKSPACE_ROOT=/content/drive/MyDrive/livros-output \
+  PYTHONIOENCODING=utf-8 \
+  node src/cli.js convert ./input-bio-completo
 ```
+
+### Sessão expirou (12h) — retomar
+Com `WORKSPACE_ROOT` no Drive, basta:
+```bash
+!cd /content/livros-converter && \
+  WORKSPACE_ROOT=/content/drive/MyDrive/livros-output \
+  node src/cli.js resume input-bio-completo
+```
+- O OCR pula páginas com `text_source` no manifest (granular por página).
+- O conversor pula lotes em `stages.convert.batchesDone` no `.state.json`.
+- Variável `OCR_FORCE=1` reprocessa tudo se precisar.
 
 ### GLM-OCR baixando lento (~3GB)
 A primeira execução baixa pesos. Cache ele no Drive:

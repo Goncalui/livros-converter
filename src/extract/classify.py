@@ -58,7 +58,12 @@ def classify_image_folder(folder: Path, raw_dir: Path):
         img_name = f"page-{i:03d}{src.suffix.lower()}"
         dst = raw_dir / img_name
         if not dst.exists():
-            dst.write_bytes(src.read_bytes())
+            # Prefere symlink (rápido, não duplica MB no Drive FUSE).
+            # Fallback para cópia se symlink falhar (Windows sem perms, etc).
+            try:
+                os.symlink(src, dst)
+            except OSError:
+                dst.write_bytes(src.read_bytes())
         manifest.append({
             "page": i,
             "type": "escaneado",
