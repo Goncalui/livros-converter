@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeFileSyncDurable } from './util/fsync.js';
 
 const DEFAULT = {
   slug: null,
@@ -36,7 +37,7 @@ export class State {
   save() {
     this.data.updatedAt = new Date().toISOString();
     fs.mkdirSync(path.dirname(this.path), { recursive: true });
-    fs.writeFileSync(this.path, JSON.stringify(this.data, null, 2));
+    writeFileSyncDurable(this.path, JSON.stringify(this.data, null, 2));
   }
 
   startStage(name) {

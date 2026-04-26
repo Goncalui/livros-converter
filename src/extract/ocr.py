@@ -200,8 +200,8 @@ def main():
                     entry["ocr_confidence"] = round(conf, 4)
                     entry["needs_vision"] = conf < args.min_confidence
                     print(f"[ocr] página {i} → {src} conf={conf:.2f}", flush=True)
-                # flush manifest após cada chunk
-                write_json_atomic(manifest_path, manifest)
+                    # flush manifest página-a-página (Drive FUSE)
+                    write_json_atomic(manifest_path, manifest)
         return
 
     force = os.environ.get("OCR_FORCE", "0") == "1"

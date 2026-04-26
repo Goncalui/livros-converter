@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { log } from '../util/log.js';
 import { callLLM } from '../llm/router.js';
+import { writeFileSyncDurable } from '../util/fsync.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -125,7 +126,7 @@ export async function runStreaming({ rawDir, batchesDir, outDir, promptPath, sta
       needs_vision: false,
       pages: fullPages,
     };
-    fs.writeFileSync(path.join(batchesDir, `${plan.id}.json`), JSON.stringify(batch, null, 2));
+    writeFileSyncDurable(path.join(batchesDir, `${plan.id}.json`), JSON.stringify(batch, null, 2));
 
     // Limita LLMs em paralelo (rate-limit Gemini)
     while (inflightLLMs.length >= maxInflight) {
@@ -140,7 +141,7 @@ export async function runStreaming({ rawDir, batchesDir, outDir, promptPath, sta
     const job = callLLM(buildBatchPrompt(promptPath, batch), { images: [] })
       .then(result => {
         const dt = ((Date.now() - t0) / 1000).toFixed(1);
-        fs.writeFileSync(path.join(outDir, `${plan.id}.md`), result.text);
+        writeFileSyncDurable(path.join(outDir, `${plan.id}.md`), result.text);
         state.recordBatch(plan.id, true);
         state.recordLLM(result.provider, result.fallback);
         state.data.lastMarkdownPreview = {

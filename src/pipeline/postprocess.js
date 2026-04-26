@@ -3,6 +3,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { log } from '../util/log.js';
 import { slugify } from '../util/paths.js';
+import { writeFileSyncDurable } from '../util/fsync.js';
 
 /**
  * Concatena batch-NNN.md em ordem, deduplica páginas que apareceram em overlap
@@ -32,7 +33,7 @@ export function postprocess({ outDir, batchesDir, slug }) {
   }
 
   const fullPath = path.join(outDir, '_full.md');
-  fs.writeFileSync(fullPath, merged.trim() + '\n');
+  writeFileSyncDurable(fullPath, merged.trim() + '\n');
 
   // 2. extrai metadados YAML do primeiro bloco
   let frontmatter = {};
@@ -52,17 +53,17 @@ export function postprocess({ outDir, batchesDir, slug }) {
     const fname = `cap-${num}-${titleSlug}.md`;
     const fm = { ...frontmatter, capitulo: ch.title || frontmatter.capitulo, paginas_origem: ch.pages || frontmatter.paginas_origem };
     const out = `---\n${YAML.stringify(fm)}---\n\n${ch.body.trim()}\n`;
-    fs.writeFileSync(path.join(outDir, fname), out);
+    writeFileSyncDurable(path.join(outDir, fname), out);
     chapterFiles.push({ file: fname, title: ch.title, pages: ch.pages });
   });
 
   // 5. validação rápida
   const issues = validateAll(outDir, chapterFiles);
-  fs.writeFileSync(path.join(outDir, '_validation.json'), JSON.stringify(issues, null, 2));
+  writeFileSyncDurable(path.join(outDir, '_validation.json'), JSON.stringify(issues, null, 2));
 
   // 6. index.md
   const index = buildIndex(slug, frontmatter, chapterFiles, issues);
-  fs.writeFileSync(path.join(outDir, 'index.md'), index);
+  writeFileSyncDurable(path.join(outDir, 'index.md'), index);
 
   log.ok(`postprocess: ${chapterFiles.length} capítulos, ${issues.length} avisos de validação`);
   return { chapters: chapterFiles.length, issues: issues.length };

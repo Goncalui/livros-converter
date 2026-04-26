@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { callLLM } from '../llm/router.js';
 import { log } from '../util/log.js';
+import { writeFileSyncDurable } from '../util/fsync.js';
 
 let _basePrompt = null;
 function basePrompt(promptPath) {
@@ -72,7 +73,7 @@ export async function convertBatches({ batchesDir, outDir, promptPath, state, on
     }
     const dt = ((Date.now() - t0) / 1000).toFixed(1);
 
-    fs.writeFileSync(outFile, result.text);
+    writeFileSyncDurable(outFile, result.text);
     state.recordBatch(id, true);
     state.recordLLM(result.provider, result.fallback);
     state.data.lastMarkdownPreview = {
