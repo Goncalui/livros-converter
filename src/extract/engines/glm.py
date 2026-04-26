@@ -27,8 +27,14 @@ def _load():
             os.environ["CUDA_VISIBLE_DEVICES"] = cuda_dev
 
         _device = "cuda" if torch.cuda.is_available() else "cpu"
-        _dtype = torch.float16 if _device == "cuda" else torch.float32
-        print(f"[glm] carregando zai-org/GLM-OCR em {_device}...", file=sys.stderr)
+        # GLM_OCR_DTYPE: fp16 (default, ~2GB), fp32 (mais preciso, ~4GB), bf16
+        dtype_name = os.environ.get("GLM_OCR_DTYPE", "fp16").lower()
+        _dtype = {
+            "fp32": torch.float32, "float32": torch.float32,
+            "fp16": torch.float16, "float16": torch.float16, "half": torch.float16,
+            "bf16": torch.bfloat16, "bfloat16": torch.bfloat16,
+        }.get(dtype_name, torch.float16)
+        print(f"[glm] carregando zai-org/GLM-OCR em {_device} ({dtype_name})...", file=sys.stderr)
 
         _proc = AutoProcessor.from_pretrained("zai-org/GLM-OCR", trust_remote_code=True)
         _model = GlmOcrForConditionalGeneration.from_pretrained(
