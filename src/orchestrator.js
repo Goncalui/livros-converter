@@ -8,6 +8,7 @@ import { buildBatches } from './pipeline/batch.js';
 import { convertBatches } from './pipeline/convert.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { estimate } from './pipeline/estimate.js';
+import { runStreaming } from './pipeline/stream.js';
 
 const PYTHON = () => process.env.PYTHON_BIN || 'python';
 
@@ -55,50 +56,74 @@ export async function runFull(input, { slug } = {}) {
     catch (e) { state.failStage('classify', e); throw e; }
   } else log.info('classify: pulado (já concluído)');
 
-  // 2. extract (texto + ocr + imagens)
-  if (state.data.stages.extract.status !== 'completed') {
-    state.startStage('extract');
-    try {
-      await runPython('extract_text.py', [ws.raw]);
-      await runPython('ocr.py', [ws.raw]);
-      await runPython('extract_images.py', [ws.raw]);
-      state.finishStage('extract');
-    } catch (e) { state.failStage('extract', e); throw e; }
-  } else log.info('extract: pulado');
+  const STREAMING = (process.env.LLM_STREAMING ?? '1') !== '0';
 
-  // totals
+  // totals (do manifest atual após classify)
   const manifest = JSON.parse(fs.readFileSync(path.join(ws.raw, 'manifest.json'), 'utf8'));
   state.data.totals.pages = manifest.length;
   state.data.totals.native = manifest.filter(m => m.type === 'nativo').length;
   state.data.totals.scanned = manifest.filter(m => m.type === 'escaneado').length;
   state.save();
 
-  // 3. estimate
-  if (state.data.stages.estimate.status !== 'completed') {
-    state.startStage('estimate');
-    state.data.estimate = estimate(ws.raw, ws.batches);
-    state.finishStage('estimate');
-  }
-
-  // 4. batch
-  if (state.data.stages.batch.status !== 'completed') {
-    state.startStage('batch');
+  if (STREAMING) {
+    log.info('LLM_STREAMING=1 → rodando OCR e LLM em paralelo (a cada lote pronto, dispara LLM)');
+    state.startStage('extract');
+    state.startStage('convert');
     try {
-      const ids = buildBatches(ws.raw, ws.batches);
-      state.data.totals.batches = ids.length;
-      state.finishStage('batch');
-    } catch (e) { state.failStage('batch', e); throw e; }
-  } else log.info('batch: pulado');
+      await runStreaming({
+        rawDir: ws.raw,
+        batchesDir: ws.batches,
+        outDir: ws.output,
+        promptPath: PROMPT_PATH,
+        state,
+        pythonBin: PYTHON(),
+        ocrScript: path.join(PROJECT_ROOT, 'src', 'extract', 'ocr.py'),
+      });
+      state.finishStage('extract');
+      state.finishStage('convert');
+    } catch (e) {
+      state.failStage('convert', e);
+      throw e;
+    }
+  } else {
+    // 2. extract clássico (sequencial)
+    if (state.data.stages.extract.status !== 'completed') {
+      state.startStage('extract');
+      try {
+        await runPython('extract_text.py', [ws.raw]);
+        await runPython('ocr.py', [ws.raw]);
+        await runPython('extract_images.py', [ws.raw]);
+        state.finishStage('extract');
+      } catch (e) { state.failStage('extract', e); throw e; }
+    } else log.info('extract: pulado');
 
-  // 5. convert
-  state.startStage('convert');
-  try {
-    await convertBatches({
-      batchesDir: ws.batches, outDir: ws.output,
-      promptPath: PROMPT_PATH, state,
-    });
-    state.finishStage('convert');
-  } catch (e) { state.failStage('convert', e); throw e; }
+    // 3. estimate
+    if (state.data.stages.estimate.status !== 'completed') {
+      state.startStage('estimate');
+      state.data.estimate = estimate(ws.raw, ws.batches);
+      state.finishStage('estimate');
+    }
+
+    // 4. batch
+    if (state.data.stages.batch.status !== 'completed') {
+      state.startStage('batch');
+      try {
+        const ids = buildBatches(ws.raw, ws.batches);
+        state.data.totals.batches = ids.length;
+        state.finishStage('batch');
+      } catch (e) { state.failStage('batch', e); throw e; }
+    } else log.info('batch: pulado');
+
+    // 5. convert
+    state.startStage('convert');
+    try {
+      await convertBatches({
+        batchesDir: ws.batches, outDir: ws.output,
+        promptPath: PROMPT_PATH, state,
+      });
+      state.finishStage('convert');
+    } catch (e) { state.failStage('convert', e); throw e; }
+  }
 
   // 6. postprocess
   state.startStage('postprocess');

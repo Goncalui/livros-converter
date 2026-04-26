@@ -148,33 +148,32 @@ def main():
 
     print(f"[ocr] modo={args.mode} min_conf={args.min_confidence}", flush=True)
 
-    # Modo GLM puro com batching: processa todas as páginas escaneadas de uma vez
+    # Modo GLM puro com batching: processa em chunks e flusha disk a cada chunk
+    # (essencial para o pipeline de streaming, que polla os arquivos por página).
     if args.mode == "glm":
         from engines import glm as eng_glm
         scanned = [e for e in manifest if e["type"] == "escaneado"]
         if scanned:
-            paths = [raw_dir / e["image"] for e in scanned]
             batch_size = int(os.environ.get("GLM_OCR_BATCH_SIZE", "2"))
-            print(f"[ocr] GLM batch_size={batch_size} sobre {len(paths)} páginas", flush=True)
-            results = eng_glm.run_batch(paths, batch_size=batch_size)
-            for entry, (text, conf, _layout) in zip(scanned, results):
-                i = entry["page"]
-                if text is None:
-                    # fallback Paddle
-                    p = run_engine("paddle", raw_dir / entry["image"])
-                    text = p["text"] or ""
-                    conf = p["confidence"]
-                    src = "paddle"
-                else:
-                    src = "glm"
-                out = raw_dir / f"page-{i:03d}.txt"
-                write_text(out, text)
-                entry["text_file"] = out.name
-                entry["text_source"] = src
-                entry["ocr_confidence"] = round(conf, 4)
-                entry["needs_vision"] = conf < args.min_confidence
-                print(f"[ocr] página {i} → {src} conf={conf:.2f}", flush=True)
-        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"[ocr] GLM batch_size={batch_size} sobre {len(scanned)} páginas", flush=True)
+            for cs in range(0, len(scanned), batch_size):
+                chunk = scanned[cs:cs + batch_size]
+                paths = [raw_dir / e["image"] for e in chunk]
+                results = eng_glm.run_batch(paths, batch_size=batch_size)
+                for entry, (text, conf, _layout) in zip(chunk, results):
+                    i = entry["page"]
+                    src = "glm" if text else "none"
+                    out = raw_dir / f"page-{i:03d}.txt"
+                    write_text(out, text or "")
+                    entry["text_file"] = out.name
+                    entry["text_source"] = src
+                    entry["ocr_confidence"] = round(conf, 4)
+                    entry["needs_vision"] = conf < args.min_confidence
+                    print(f"[ocr] página {i} → {src} conf={conf:.2f}", flush=True)
+                # flush manifest após cada chunk
+                manifest_path.write_text(
+                    json.dumps(manifest, ensure_ascii=False, indent=2),
+                    encoding="utf-8")
         return
 
     for entry in manifest:
