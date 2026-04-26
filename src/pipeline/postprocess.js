@@ -86,8 +86,10 @@ function stripDuplicatePageMarkers(chunk, seen) {
 }
 
 function splitByChapter(md, fm) {
-  // Procura headings nível 3 que pareçam capítulo
-  const re = /^###\s+(?:Capítulo\s+)?([^\n]+)$/gim;
+  // Só divide em headings que CLARAMENTE são capítulo/unidade.
+  // Aceita: "### Capítulo 3 — Foo", "### Unidade 2 — Bar", "## Capítulo X".
+  // Rejeita: "### 1.", "### Questão 5", "### Hipócrates", "### Aristóteles".
+  const re = /^#{2,3}\s+(?:Cap[íi]tulo|Unidade)\s+([^\n]+)$/gim;
   const matches = [];
   let m;
   while ((m = re.exec(md)) !== null) matches.push({ index: m.index, title: m[1].trim(), full: m[0] });
@@ -101,13 +103,33 @@ function splitByChapter(md, fm) {
   const fmEnd = md.match(/^\s*---\n[\s\S]+?\n---\n/);
   const startBody = fmEnd ? fmEnd[0].length : 0;
 
+  // Extrai chave de identificação ("capítulo 1", "unidade A") de cada match
+  const keyOf = full => {
+    const m = full.match(/(Cap[íi]tulo|Unidade)\s+(\S+?)(?:\s*[—\-–:]|\s*$)/i);
+    return m ? `${m[1].toLowerCase()}-${m[2].toLowerCase()}` : null;
+  };
+
+  // Agrupa matches consecutivos com mesma chave (LLM repetiu o heading entre batches)
+  const groups = [];
+  let cur = null;
+  for (const m of matches) {
+    const key = keyOf(m.full) || m.title;
+    if (cur && cur.key === key) {
+      // mantém title mais informativo (mais longo)
+      if (m.title.length > cur.title.length) cur.title = m.title;
+      continue;
+    }
+    cur = { key, title: m.title, index: m.index };
+    groups.push(cur);
+  }
+
   const chapters = [];
-  for (let i = 0; i < matches.length; i++) {
-    const a = matches[i].index;
-    const b = i + 1 < matches.length ? matches[i + 1].index : md.length;
+  for (let i = 0; i < groups.length; i++) {
+    const a = groups[i].index;
+    const b = i + 1 < groups.length ? groups[i + 1].index : md.length;
     const body = md.slice(Math.max(a, startBody), b);
     const pages = inferPagesFromBody(body);
-    chapters.push({ title: matches[i].title, body, pages });
+    chapters.push({ title: groups[i].title, body, pages });
   }
   return chapters;
 }
