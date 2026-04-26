@@ -154,7 +154,7 @@ def main():
         scanned = [e for e in manifest if e["type"] == "escaneado"]
         if scanned:
             paths = [raw_dir / e["image"] for e in scanned]
-            batch_size = int(os.environ.get("GLM_OCR_BATCH_SIZE", "3"))
+            batch_size = int(os.environ.get("GLM_OCR_BATCH_SIZE", "2"))
             print(f"[ocr] GLM batch_size={batch_size} sobre {len(paths)} páginas", flush=True)
             results = eng_glm.run_batch(paths, batch_size=batch_size)
             for entry, (text, conf, _layout) in zip(scanned, results):

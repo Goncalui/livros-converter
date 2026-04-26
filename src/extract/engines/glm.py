@@ -139,7 +139,7 @@ def run_batch(image_paths, batch_size=None):
         return [(None, 0.0, None) for _ in image_paths]
 
     if batch_size is None:
-        batch_size = int(os.environ.get("GLM_OCR_BATCH_SIZE", "3"))
+        batch_size = int(os.environ.get("GLM_OCR_BATCH_SIZE", "2"))
     batch_size = max(1, batch_size)
     max_new = int(os.environ.get("GLM_OCR_MAX_NEW_TOKENS", "4096"))
 
