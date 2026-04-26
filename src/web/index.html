@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>livros-converter — painel</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#e6edf3;
+    --muted:#8b949e; --accent:#58a6ff; --ok:#3fb950; --warn:#d29922; --err:#f85149;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter; background:var(--bg); color:var(--fg); }
+  header { padding: 12px 18px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:14px; }
+  header h1 { font-size: 16px; margin: 0; font-weight:600; }
+  header select { background:var(--panel); color:var(--fg); border:1px solid var(--border); border-radius:6px; padding:6px 10px; }
+  header .spacer { flex:1; }
+  header .pill { font-size:12px; color:var(--muted); }
+  main { display:grid; grid-template-columns: 320px 1fr; gap: 0; height: calc(100vh - 50px); }
+  aside { border-right:1px solid var(--border); overflow-y:auto; padding: 14px; }
+  section.content { overflow-y:auto; padding: 14px 22px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 10px 0; font-weight:600; }
+  .stage { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px dashed var(--border); }
+  .stage:last-child { border-bottom:0; }
+  .stage .name { font-weight:500; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); }
+  .badge.completed { background: rgba(63,185,80,.15); border-color:var(--ok); color:var(--ok); }
+  .badge.in_progress { background: rgba(88,166,255,.15); border-color:var(--accent); color:var(--accent); }
+  .badge.failed { background: rgba(248,81,73,.15); border-color:var(--err); color:var(--err); }
+  .badge.pending { color:var(--muted); }
+  .progress { height:6px; background:#21262d; border-radius:999px; overflow:hidden; margin-top:8px; }
+  .progress > div { height:100%; background:var(--accent); transition: width .3s ease; }
+  .files { display:flex; flex-direction:column; gap:2px; margin-top: 6px; }
+  .files button { background:transparent; border:0; color:var(--fg); text-align:left; padding:6px 10px; border-radius:6px; cursor:pointer; font:inherit; }
+  .files button:hover { background:#21262d; }
+  .files button.active { background:#21262d; color:var(--accent); }
+  .stat { display:flex; justify-content:space-between; padding:3px 0; }
+  .stat .k { color:var(--muted); }
+  pre.md { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; white-space:pre-wrap; word-break:break-word; font: 13px/1.55 ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; }
+  pre.log { background:#000; border:1px solid var(--border); border-radius:8px; padding:10px 14px; max-height: 240px; overflow:auto; font: 12px/1.5 ui-monospace; color:#9ed1ff; }
+  .cmp-grid { display:grid; grid-template-columns: 280px 1fr 1fr; gap:10px; }
+  .cmp-grid > div { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px; max-height: calc(100vh - 220px); overflow:auto; }
+  .cmp-grid img { max-width:100%; border-radius:6px; border:1px solid var(--border); }
+  .cmp-grid h3 { margin: 0 0 8px 0; font-size:13px; display:flex; justify-content:space-between; align-items:center; }
+  .cmp-grid .winner { color:var(--ok); font-size:11px; padding:2px 6px; border:1px solid var(--ok); border-radius:999px; }
+  .cmp-grid pre { white-space:pre-wrap; word-break:break-word; font: 12px/1.5 ui-monospace; margin:0; }
+  .cmp-grid table { width:100%; font-size:12px; border-collapse:collapse; margin-top:6px; }
+  .cmp-grid table td { padding:2px 6px; border-bottom:1px dashed var(--border); }
+  .cmp-grid table td:first-child { color:var(--muted); }
+  .cmp-grid table td:last-child { text-align:right; font-variant-numeric: tabular-nums; }
+  .tabs { display:flex; gap:4px; margin-bottom:10px; }
+  .tabs button { background:transparent; color:var(--muted); border:1px solid var(--border); padding:6px 12px; border-radius:6px; cursor:pointer; }
+  .tabs button.active { color:var(--fg); background:var(--panel); border-color:var(--accent); }
+  .empty { color:var(--muted); padding: 30px; text-align:center; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .pulse::after { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-left:6px; animation: p 1s infinite; }
+  @keyframes p { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 livros-converter</h1>
+  <select id="bookSelect"></select>
+  <span class="pill" id="updatedAt"></span>
+  <span class="spacer"></span>
+  <span class="pill" id="conn">conectando…</span>
+</header>
+<main>
+  <aside>
+    <div class="card">
+      <h2>Pipeline</h2>
+      <div id="stages"></div>
+      <div class="progress"><div id="bar" style="width:0%"></div></div>
+      <div class="stat" style="margin-top:10px"><span class="k">Lotes</span><span id="batchCount">0/0</span></div>
+    </div>
+    <div class="card">
+      <h2>Estatísticas</h2>
+      <div class="stat"><span class="k">Páginas</span><span id="pages">—</span></div>
+      <div class="stat"><span class="k">Nativas / OCR</span><span id="natOcr">—</span></div>
+      <div class="stat"><span class="k">Capítulos</span><span id="chapters">—</span></div>
+      <div class="stat"><span class="k">Chamadas LLM</span><span id="llmCalls">—</span></div>
+      <div class="stat"><span class="k">Fallbacks</span><span id="llmFb">—</span></div>
+      <div class="stat"><span class="k">Por provider</span><span id="byProvider">—</span></div>
+    </div>
+    <div class="card">
+      <h2>Custo estimado</h2>
+      <div id="estimate" class="stat"><span class="k">—</span><span></span></div>
+    </div>
+    <div class="card">
+      <h2>Arquivos gerados</h2>
+      <div class="files" id="files"></div>
+    </div>
+  </aside>
+  <section class="content">
+    <div class="tabs">
+      <button data-tab="preview" class="active">Preview</button>
+      <button data-tab="compare">Comparação OCR</button>
+      <button data-tab="log">Log</button>
+    </div>
+    <div id="tabPreview"><pre class="md" id="preview">Selecione um livro para começar.</pre></div>
+    <div id="tabCompare" hidden>
+      <div class="card" style="margin-bottom:10px">
+        <h2>Páginas comparadas</h2>
+        <div id="compareList" class="files"></div>
+        <div id="compareSummary" style="margin-top:10px; font-size:12px; color:var(--muted)"></div>
+      </div>
+      <div id="compareDetail" class="empty">selecione uma página acima</div>
+    </div>
+    <div id="tabLog" hidden><pre class="log" id="logBox">—</pre></div>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

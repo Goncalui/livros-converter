@@ -1,0 +1,7 @@
+PyMuPDF>=1.24.0
+pdfplumber>=0.11.0
+Pillow>=10.0.0
+paddlepaddle>=2.6.0
+paddleocr>=2.8.0
+pytesseract>=0.3.10
+glmocr>=0.1.0

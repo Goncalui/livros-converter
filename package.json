@@ -1,0 +1,18 @@
+{
+  "name": "livros-converter",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pipeline para converter livros didáticos (PDF/imagens) em Markdown estruturado para RAG",
+  "bin": {
+    "livros": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "convert": "node src/cli.js convert"
+  },
+  "dependencies": {
+    "@google/genai": "^0.7.0",
+    "dotenv": "^16.4.5",
+    "yaml": "^2.5.1"
+  }
+}

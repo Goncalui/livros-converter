@@ -1,0 +1,14 @@
+node_modules/
+.env
+workspace/
+*.log
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# Material protegido por direitos autorais — nunca subir
+*.pdf
+input-*/
+**/page-*.png
+**/page-*.jpg
